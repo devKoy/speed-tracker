@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Speed Tracker</title>
+    <style>
+        #map {
+            height: 400px;
+            width: 100%;
+        }
+    </style>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+</head>
+
+<body>
+    <h1>Speed Tracker</h1>
+    <div id="map"></div>
+    <p id="speed">Calculating speed...</p>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        let map, marker, previousPosition;
+
+        function initMap() {
+            map = L.map('map').setView([0, 0], 13);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(map);
+
+            // Check if geolocation is available
+            if (navigator.geolocation) {
+                navigator.geolocation.watchPosition(trackPosition, handleLocationError);
+            } else {
+                alert("Geolocation is not supported by this browser.");
+            }
+        }
+
+        function trackPosition(position) {
+            const currentPosition = {
+                lat: position.coords.latitude,
+                lng: position.coords.longitude
+            };
+
+            if (!marker) {
+                // Create a marker for the initial position
+                marker = L.marker([currentPosition.lat, currentPosition.lng]).addTo(map);
+            } else {
+                // Update the marker position
+                marker.setLatLng([currentPosition.lat, currentPosition.lng]);
+            }
+
+            map.setView([currentPosition.lat, currentPosition.lng]);
+
+            if (previousPosition) {
+                // Calculate distance in meters between previous and current position
+                const distance = calculateDistance(previousPosition.lat, previousPosition.lng, currentPosition.lat,
+                    currentPosition.lng);
+
+                // Calculate speed in meters per second
+                const speed = distance / (position.timestamp - previousPosition.timestamp);
+
+                // Convert speed to kilometers per hour
+                const speedKmph = (speed * 3.6).toFixed(2);
+
+                // Update the speed display
+                document.getElementById('speed').textContent = `Speed: ${speedKmph} km/h`;
+            }
+
+            // Store the current position for the next iteration
+            previousPosition = {
+                lat: currentPosition.lat,
+                lng: currentPosition.lng,
+                timestamp: position.timestamp
+            };
+        }
+
+        function handleLocationError(error) {
+            let errorMessage = "";
+            switch (error.code) {
+                case error.PERMISSION_DENIED:
+                    errorMessage = "User denied the request for Geolocation.";
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    errorMessage = "Location information is unavailable.";
+                    break;
+                case error.TIMEOUT:
+                    errorMessage = "The request to get user location timed out.";
+                    break;
+                case error.UNKNOWN_ERROR:
+                    errorMessage = "An unknown error occurred.";
+                    break;
+            }
+            alert(errorMessage);
+        }
+
+        function calculateDistance(lat1, lng1, lat2, lng2) {
+            const earthRadius = 6371000; // Radius of the Earth in meters
+
+            const dLat = degToRad(lat2 - lat1);
+            const dLng = degToRad(lng2 - lng1);
+
+            const a =
+                Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(degToRad(lat1)) * Math.cos(degToRad(lat2)) *
+                Math.sin(dLng / 2) * Math.sin(dLng / 2);
+
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+            const distance = earthRadius * c;
+            return distance;
+        }
+
+        function degToRad(deg) {
+            return deg * (Math.PI / 180);
+        }
+    </script>
+    <script>
+        window.onload = initMap;
+    </script>
+</body>
+
+</html>

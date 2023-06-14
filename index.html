@@ -1,147 +1,133 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-  <title>Speed Tracker</title>
-  <style>
-    #map {
-      height: 400px;
-      width: 100%;
-    }
-  </style>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-</head>
-<body>
-  <h1>Speed Tracker</h1>
-  <div id="map"></div>
-  <p id="speed">Calculating speed...</p>
-
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script>
-    let map;
-    let users = {}; // Store user positions and markers
-
-    function initMap() {
-      map = L.map('map').setView([0, 0], 13);
-
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-      }).addTo(map);
-
-      // Check if geolocation is available
-      if (navigator.geolocation) {
-        navigator.geolocation.watchPosition(trackPosition, handleLocationError);
-      } else {
-        alert("Geolocation is not supported by this browser.");
-      }
-    }
-
-    function trackPosition(position) {
-      const userId = "user1"; // You can use a unique identifier for each user
-
-      const currentPosition = {
-        lat: position.coords.latitude,
-        lng: position.coords.longitude
-      };
-
-      if (!users[userId]) {
-        // Create a marker for the user's initial position
-        users[userId] = {
-          position: currentPosition,
-          marker: L.marker([currentPosition.lat, currentPosition.lng]).addTo(map)
-        };
-      } else {
-        // Update the marker position for the user
-        users[userId].position = currentPosition;
-        users[userId].marker.setLatLng([currentPosition.lat, currentPosition.lng]);
-      }
-
-      // Center the map on the user's current position
-      map.setView([currentPosition.lat, currentPosition.lng]);
-
-      // Calculate and display the speed for the user
-      calculateAndDisplaySpeed(userId, position.timestamp);
-
-      // Update the positions of other users on the map
-      updateOtherUsersPositions(userId);
-    }
-
-    function updateOtherUsersPositions(currentUserId) {
-      // Loop through other users and update their marker positions
-      for (const userId in users) {
-        if (userId !== currentUserId) {
-          const user = users[userId];
-          user.marker.setLatLng([user.position.lat, user.position.lng]);
+    <title>Speed Tracker with ETA</title>
+    <style>
+        #map {
+            height: 400px;
+            width: 100%;
         }
-      }
-    }
+    </style>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+</head>
 
-    function calculateAndDisplaySpeed(userId, timestamp) {
-      const user = users[userId];
+<body>
+    <h1>Speed Tracker with ETA</h1>
+    <div id="map"></div>
+    <p id="speed">Calculating speed...</p>
+    <p id="eta">Estimated Time of Arrival: -</p>
 
-      if (user.previousPosition) {
-        // Calculate distance in meters between previous and current position
-        const distance = calculateDistance(user.previousPosition.lat, user.previousPosition.lng, user.position.lat, user.position.lng);
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        let map, marker, previousPosition;
+        const destination = {
+            lat: 13.686627,
+            lng: 123.055015
+        };
 
-        // Calculate speed in meters per second
-        const speed = distance / (timestamp - user.previousPosition.timestamp);
+        function initMap() {
+            map = L.map('map').setView([0, 0], 13);
 
-        // Convert speed to kilometers per hour
-        const speedKmph = (speed * 3.6).toFixed(2);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(map);
 
-        // Update the speed display for the user
-        document.getElementById('speed').textContent = `User ${userId} Speed: ${speedKmph} km/h`;
-      }
+            // Check if geolocation is available
+            if (navigator.geolocation) {
+                navigator.geolocation.watchPosition(trackPosition, handleLocationError);
+            } else {
+                alert("Geolocation is not supported by this browser.");
+            }
+        }
 
-      // Store the current position for the next iteration
-      user.previousPosition = {
-        lat: user.position.lat,
-        lng: user.position.lng,
-        timestamp: timestamp
-      };
-    }
+        function trackPosition(position) {
+            const currentPosition = {
+                lat: position.coords.latitude,
+                lng: position.coords.longitude
+            };
 
-    function handleLocationError(error) {
-      let errorMessage = "";
-      switch(error.code) {
-        case error.PERMISSION_DENIED:
-          errorMessage = "User denied the request for Geolocation.";
-          break;
-        case error.POSITION_UNAVAILABLE:
-          errorMessage = "Location information is unavailable.";
-          break;
-        case error.TIMEOUT:
-          errorMessage = "The request to get user location timed out.";
-          break;
-        case error.UNKNOWN_ERROR:
-          errorMessage = "An unknown error occurred.";
-          break;
-      }
-      alert(errorMessage);
-    }
+            if (!marker) {
+                // Create a marker for the initial position
+                marker = L.marker([currentPosition.lat, currentPosition.lng]).addTo(map);
+            } else {
+                // Update the marker position
+                marker.setLatLng([currentPosition.lat, currentPosition.lng]);
+            }
 
-    function calculateDistance(lat1, lng1, lat2, lng2) {
-      const earthRadius = 6371000; // Radius of the Earth in meters
+            map.setView([currentPosition.lat, currentPosition.lng]);
 
-      const dLat = degToRad(lat2 - lat1);
-      const dLng = degToRad(lng2 - lng1);
+            if (previousPosition) {
+                // Calculate distance in meters between previous and current position
+                const distance = calculateDistance(previousPosition.lat, previousPosition.lng, currentPosition.lat,
+                    currentPosition.lng);
 
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(degToRad(lat1)) * Math.cos(degToRad(lat2)) *
-        Math.sin(dLng / 2) * Math.sin(dLng / 2);
+                // Calculate speed in meters per second
+                const speed = distance / (position.timestamp - previousPosition.timestamp);
 
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                // Convert speed to kilometers per hour
+                const speedKmph = (speed * 3.6).toFixed(2);
 
-      const distance = earthRadius * c;
-      return distance;
-    }
+                // Calculate ETA based on the distance and speed
+                const etaInSeconds = (distance / speed).toFixed(0);
+                const etaInMinutes = Math.floor(etaInSeconds / 60);
 
-    function degToRad(deg) {
-      return deg * (Math.PI / 180);
-    }
-  </script>
-  <script>
-    window.onload = initMap;
-  </script>
+                // Update the speed and ETA display
+                document.getElementById('speed').textContent = `Speed: ${speedKmph} km/h`;
+                document.getElementById('eta').textContent = `Estimated Time of Arrival: ${etaInMinutes} minutes`;
+            }
+
+            // Store the current position for the next iteration
+            previousPosition = {
+                lat: currentPosition.lat,
+                lng: currentPosition.lng,
+                timestamp: position.timestamp
+            };
+        }
+
+        function handleLocationError(error) {
+            let errorMessage = "";
+            switch (error.code) {
+                case error.PERMISSION_DENIED:
+                    errorMessage = "User denied the request for Geolocation.";
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    errorMessage = "Location information is unavailable.";
+                    break;
+                case error.TIMEOUT:
+                    errorMessage = "The request to get user location timed out.";
+                    break;
+                case error.UNKNOWN_ERROR:
+                    errorMessage = "An unknown error occurred.";
+                    break;
+            }
+            alert(errorMessage);
+        }
+
+        function calculateDistance(lat1, lng1, lat2, lng2) {
+            const earthRadius = 6371000; // Radius of the Earth in meters
+
+            const dLat = degToRad(lat2 - lat1);
+            const dLng = degToRad(lng2 - lng1);
+
+            const a =
+                Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(degToRad(lat1)) * Math.cos(degToRad(lat2)) *
+                Math.sin(dLng / 2) * Math.sin(dLng / 2);
+
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+            const distance = earthRadius * c;
+            return distance;
+        }
+
+        function degToRad(deg) {
+            return deg * (Math.PI / 180);
+        }
+    </script>
+    <script>
+        window.onload = initMap;
+    </script>
 </body>
+
 </html>

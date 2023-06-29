@@ -69,11 +69,8 @@
                     var userLng = position.coords.longitude;
                     var speed = position.coords.speed || 0; // Get the current speed or assume 0 if unavailable
                     var map = initMap(); // Get the map object
-                    var estimatedTime = calculateEstimatedTime(distance, speed);
 
-                    // Update UI elements with the results
-                    var speedElement = document.getElementById('speed');
-                    speedElement.textContent = 'Speed: ' + speed.toFixed(2) + ' km/h';
+
 
                     // Marker: User's location
                     var userMarker = L.marker([userLat, userLng]).addTo(map);
@@ -103,6 +100,13 @@
                             // Calculate estimated time of arrival
                             var distance = map.distance([userLat, userLng], [13.8406, 122.9206]);
                             var estimatedTime = calculateEstimatedTime(distance);
+                            // Update UI elements with the results
+                            var speedElement = document.getElementById('speed');
+                            speedElement.textContent = 'Speed: ' + speed.toFixed(2) + ' km/h';
+                            if (speed.toFixed(2) < 1) {
+                                estimatedTime =
+                                    "Unable to calculate ETA. Delivery not yet moving or experiencing traffic."
+                            }
                             var etaElement = document.getElementById('eta');
                             etaElement.textContent = 'Estimated Time of Arrival: ' + estimatedTime;
                             getReverseGeolocation(userLat, userLng)

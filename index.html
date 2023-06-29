@@ -1,127 +1,165 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-  <title>Speed Tracker with ETA</title>
-  <style>
-    #map {
-      height: 400px;
-      width: 100%;
-    }
-  </style>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <title>Parcel Tracking</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/leaflet.css" />
+    <style>
+        /* CSS styling */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        .map {
+            width: 100%;
+            height: 400px;
+            margin-top: 20px;
+        }
+    </style>
 </head>
+
 <body>
-  <h1>Speed Tracker with ETA</h1>
-  <div id="map"></div>
-  <p id="speed">Calculating speed...</p>
-  <p id="eta">Estimated Time of Arrival: -</p>
+    <div class="container">
+        <h1>DK Tracking Test</h1>
+        <div id="map" class="map"></div>
+        <p id="loc"></p>
+        <p id="eta"></p>
+    </div>
 
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script>
-    let map, marker, previousPosition;
-    const destination = {
-      lat: 13.686627,
-      lng: 123.055015
-    };
+    <!-- Include Leaflet library and implement tracking functionality -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/leaflet.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script>
+        // JavaScript code for tracking functionality
+        let key = "5b3ce3597851110001cf624829ec6d9cbefd473c848105f3e0355d29"
+        // Function to initialize the map
+        function initMap() {
+            var mapElement = document.getElementById('map');
+            var map = L.map(mapElement).setView([13.7791, 122.9803], 10); // Initial map center (Manila)
 
-    function initMap() {
-      map = L.map('map').setView([0, 0], 13);
+            // Add a tile layer for the map (you can choose different tile providers)
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors',
+                maxZoom: 18
+            }).addTo(map);
 
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-      }).addTo(map);
+            return map;
+        }
 
-      // Check if geolocation is available
-      if (navigator.geolocation) {
-        navigator.geolocation.watchPosition(trackPosition, handleLocationError);
-      } else {
-        alert("Geolocation is not supported by this browser.");
-      }
-    }
+        // Function to get user's location and calculate estimated time of arrival
+        function getUserLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function (position) {
+                    var userLat = position.coords.latitude;
+                    var userLng = position.coords.longitude;
 
-    function trackPosition(position) {
-      const currentPosition = {
-        lat: position.coords.latitude,
-        lng: position.coords.longitude
-      };
+                    var map = initMap(); // Get the map object
 
-      if (!marker) {
-        // Create a marker for the initial position
-        marker = L.marker([currentPosition.lat, currentPosition.lng]).addTo(map);
-      } else {
-        // Update the marker position
-        marker.setLatLng([currentPosition.lat, currentPosition.lng]);
-      }
+                    // Marker: User's location
+                    var userMarker = L.marker([userLat, userLng]).addTo(map);
+                    userMarker.bindPopup('Your Location');
 
-      map.setView([currentPosition.lat, currentPosition.lng]);
+                    // Marker: Sipocot
+                    var sipocotMarker = L.marker([13.8406, 122.9206]).addTo(map);
+                    sipocotMarker.bindPopup('Sipocot, Camarines Sur');
 
-      const speedMps = position.coords.speed; // Speed in meters per second
-      const speedKmph = (speedMps * 3.6).toFixed(2); // Convert speed to kilometers per hour
+                    // Fetch the road path line using routing service
+                    var url =
+                        'https://api.openrouteservice.org/v2/directions/driving-car?api_key=' + key +
+                        '&start=' +
+                        userLng + ',' + userLat + '&end=122.9206,13.8406';
+                    axios.get(url)
+                        .then(function (response) {
+                            var route = response.data.features[0].geometry.coordinates;
+                            var pathCoordinates = [];
+                            for (var i = 0; i < route.length; i++) {
+                                pathCoordinates.push([route[i][1], route[i][0]]);
+                            }
+                            var pathLine = L.polyline(pathCoordinates, {
+                                color: 'red'
+                            }).addTo(map);
+                            map.fitBounds(pathLine.getBounds());
 
-      // Update the speed display
-      document.getElementById('speed').textContent = `Speed: ${speedKmph} km/h`;
+                            // Calculate estimated time of arrival
+                            var distance = map.distance([userLat, userLng], [13.8406, 122.9206]);
+                            var estimatedTime = calculateEstimatedTime(distance);
+                            var etaElement = document.getElementById('eta');
+                            etaElement.textContent = 'Estimated Time of Arrival: ' + estimatedTime;
+                            getReverseGeolocation(userLat, userLng)
+                        })
+                        .catch(function (error) {
+                            console.log(error);
+                        });
+                });
+            } else {
+                alert('Geolocation is not supported by your browser.');
+            }
+        }
 
-      if (previousPosition) {
-        // Calculate distance in meters between previous and current position
-        const distance = calculateDistance(previousPosition.lat, previousPosition.lng, currentPosition.lat, currentPosition.lng);
+        // Call the function to get user's location and calculate estimated time of arrival
+        getUserLocation();
 
-        // Calculate ETA based on the distance and speed
-        const etaInSeconds = (distance / speedMps).toFixed(0);
-        const etaInMinutes = Math.floor(etaInSeconds / 60);
+        // Function to calculate estimated time of arrival based on distance
+        function calculateEstimatedTime(distance) {
+            // Assuming an average speed of 50 km/h (you can adjust this value as needed)
+            var averageSpeed = 50;
+            var estimatedTimeInHours = distance / averageSpeed;
+            var estimatedTimeInMinutes = estimatedTimeInHours * 60;
 
-        // Update the ETA display
-        document.getElementById('eta').textContent = `Estimated Time of Arrival: ${etaInMinutes} minutes`;
-      }
+            var hours = Math.floor(estimatedTimeInHours);
+            var minutes = Math.round(estimatedTimeInMinutes % 60);
 
-      // Store the current position for the next iteration
-      previousPosition = {
-        lat: currentPosition.lat,
-        lng: currentPosition.lng
-      };
-    }
+            var estimatedTime = '';
+            if (hours > 0) {
+                estimatedTime += hours + ' hour';
+                if (hours > 1) {
+                    estimatedTime += 's';
+                }
+            }
+            if (minutes > 0) {
+                estimatedTime += ' ' + minutes + ' minute';
+                if (minutes > 1) {
+                    estimatedTime += 's';
+                }
+            }
 
-    function handleLocationError(error) {
-      let errorMessage = "";
-      switch(error.code) {
-        case error.PERMISSION_DENIED:
-          errorMessage = "User denied the request for Geolocation.";
-          break;
-        case error.POSITION_UNAVAILABLE:
-          errorMessage = "Location information is unavailable.";
-          break;
-        case error.TIMEOUT:
-          errorMessage = "The request to get user location timed out.";
-          break;
-        case error.UNKNOWN_ERROR:
-          errorMessage = "An unknown error occurred.";
-          break;
-      }
-      alert(errorMessage);
-    }
+            return estimatedTime.trim();
+        }
 
-    function calculateDistance(lat1, lng1, lat2, lng2) {
-      const earthRadius = 6371000; // Radius of the Earth in meters
+        // Function to get reverse geolocation
+        function getReverseGeolocation(lat, lng) {
+            var reverseGeocodeUrl =
+                `https://api.openrouteservice.org/geocode/reverse?api_key=` + key + `&point.lat=` +
+                lat + `&point.lon=` + lng;
 
-      const dLat = degToRad(lat2 - lat1);
-      const dLng = degToRad(lng2 - lng1);
+            axios.get(reverseGeocodeUrl)
+                .then(function (response) {
+                    var address = response.data.features[0].properties.label;
+                    var locationElement = document.getElementById('loc');
+                    locationElement.textContent = 'Current Location: ' + address;
+                })
+                .catch(function (error) {
+                    console.log(error);
+                });
+        }
 
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(degToRad(lat1)) * Math.cos(degToRad(lat2)) *
-        Math.sin(dLng / 2) * Math.sin(dLng / 2);
-
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-      const distance = earthRadius * c;
-      return distance;
-    }
-
-    function degToRad(deg) {
-      return deg * (Math.PI / 180);
-    }
-  </script>
-  <script>
-    window.onload = initMap;
-  </script>
+        // Call the function to get user's location and calculate estimated time of arrival
+        getUserLocation();
+    </script>
 </body>
+
 </html>
